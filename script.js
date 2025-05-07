@@ -131,16 +131,32 @@ let delay = null;  // Not currently used, but keep if planned
  */
 function noteNameToMidi(noteName) {
     const match = noteName.match(/^([A-Ga-g][#b]?)(-?\d+)$/);
-    if (!match) return null;
+    if (!match) {
+        // console.warn(`noteNameToMidi: Invalid noteName format: ${noteName}`);
+        return null;
+    }
 
-    const pitch = match[1].toUpperCase();
-    const octave = parseInt(match[2], 10);
+    const notePart = match[1]; // e.g., "C", "C#", "Db"
+    const octaveString = match[2];
+
+    // Correctly form the pitch: Capitalize letter, keep accidental as is.
+    let pitch;
+    if (notePart.length > 1) { // Has an accidental
+        pitch = notePart.charAt(0).toUpperCase() + notePart.charAt(1); // e.g., "Db", "C#"
+    } else { // No accidental
+        pitch = notePart.charAt(0).toUpperCase(); // e.g., "C", "A"
+    }
+
+    const octave = parseInt(octaveString, 10);
 
     const baseMidi = NOTE_TO_MIDI_BASE[pitch];
-    if (baseMidi === undefined) return null;
+    if (baseMidi === undefined) {
+        console.warn(`noteNameToMidi: Pitch "${pitch}" (from "${noteName}") not found in NOTE_TO_MIDI_BASE.`);
+        return null;
+    }
 
     // MIDI number for octave 0 is baseMidi, add 12 for each octave higher
-    return baseMidi + 12 * octave;
+    return baseMidi + (12 * octave);
 }
 
 /**
@@ -801,8 +817,7 @@ async function setupPitchDetection() {
 
 
 // === TONE.JS SETUP ===
-// ... (Keep setupToneJS function mostly as it is) ...
-// We will lazy-create the metronome click synth in startApp or toggleMetronome
+// MODIFIED to include octave adjustment for minor key transpositions
 function setupToneJS() {
     console.log(`Setting up Tone.js for: Key=${currentKeyRoot} ${currentKeyQuality}, Progression=${currentProgressionId}`);
 
@@ -837,16 +852,41 @@ function setupToneJS() {
     console.log("Using base progression:", baseProgression.name, `(Based on ${baseProgression.baseKeyRoot} ${baseProgression.baseKeyQuality})`);
 
     // --- Calculate Transposition Interval ---
-    const baseRootMidi = noteNameToMidi(baseProgression.baseKeyRoot + '3'); // Use consistent octave for calculation
-    const targetRootMidi = noteNameToMidi(currentKeyRoot + '3');
+    // Use a consistent octave (e.g., '3') for comparing root notes to determine the interval.
+    // The actual octaves of the notes in the progression are handled by their definitions in baseProgressionsData.
+    const baseRootReferenceMidi = noteNameToMidi(baseProgression.baseKeyRoot + '3');
+    const targetRootReferenceMidi = noteNameToMidi(currentKeyRoot + '3');
     let transpositionInterval = 0;
 
-    if (baseRootMidi !== null && targetRootMidi !== null) {
-        transpositionInterval = targetRootMidi - baseRootMidi;
-        console.log(`Transposition: Base=${baseProgression.baseKeyRoot}, Target=${currentKeyRoot}, Interval=${transpositionInterval} semitones.`);
+    if (baseRootReferenceMidi !== null && targetRootReferenceMidi !== null) {
+        transpositionInterval = targetRootReferenceMidi - baseRootReferenceMidi;
+        console.log(`Transposition: Base Key=${baseProgression.baseKeyRoot}${baseProgression.baseKeyQuality}, Target Key=${currentKeyRoot}${currentKeyQuality}. Initial Interval=${transpositionInterval} semitones.`);
+
+        // --- START: Octave Adjustment for Minor Key Transpositions ---
+        // This logic applies if we are transposing *from* a minor base progression *to* a minor target key.
+        if (currentKeyQuality === 'Minor' && baseProgression.baseKeyQuality === 'Minor') {
+            // If the target root note (when compared at the same reference octave, e.g., '3')
+            // is lower in MIDI value than the base progression's root note,
+            // the simple transposition would shift the progression downwards.
+            // To avoid it sounding too low (e.g., A minor base transposed down to D minor),
+            // we add 12 semitones (an octave) to the transposition interval.
+            // Example:
+            // Base: A minor (baseKeyRoot: 'A'). Target: D minor (currentKeyRoot: 'D').
+            // A3 MIDI = 57, D3 MIDI = 50.
+            // Initial interval = 50 - 57 = -7 semitones.
+            // Since 50 (D3) < 57 (A3), the condition is met.
+            // Adjusted interval = -7 + 12 = +5 semitones.
+            // This shifts notes like 'A2' in the base prog to 'D3' instead of 'D2'.
+            if (targetRootReferenceMidi < baseRootReferenceMidi) {
+                transpositionInterval += 12;
+                console.log(`Minor key octave adjustment applied. New interval for transposition = ${transpositionInterval} semitones.`);
+            }
+        }
+        // --- END: Octave Adjustment for Minor Key Transpositions ---
+
     } else {
-        console.error(`Could not calculate transposition interval. Base MIDI: ${baseRootMidi}, Target MIDI: ${targetRootMidi}`);
-        transpositionInterval = 0;
+        console.error(`Could not calculate transposition interval. Base MIDI: ${baseRootReferenceMidi}, Target MIDI: ${targetRootReferenceMidi}`);
+        transpositionInterval = 0; // Default to no transposition on error
         pitchOutputDiv.innerHTML = `<span class="warning">Warning: Could not calculate transposition. Using base key.</span>`;
     }
 
