@@ -536,26 +536,24 @@ function drawNoteLabels() {
  * @param {number} startFret - The first fret number to display.
  * @param {number} numFrets - The total number of frets to display.
  */
-function drawFretboard(scaleNotes, startFret = 0, numFrets = NUM_FRETS_TO_SHOW) {
+function drawFretboard(scaleNotes, startFret = 0, numFrets = SLIDING_WINDOW_FRETS) {
     const svg = document.getElementById(FRETBOARD_SVG_ID);
     if (!svg) {
         console.error(`drawFretboard: Cannot find SVG element with ID ${FRETBOARD_SVG_ID}`);
         return;
     }
-    // Clear previous fretboard content
-    svg.innerHTML = '';
+    svg.innerHTML = ''; // Clear previous fretboard content
 
     const svgNS = "http://www.w3.org/2000/svg";
-    const viewBox = svg.viewBox.baseVal; // Get viewBox dimensions (e.g., 0 0 600 150)
+    const viewBox = svg.viewBox.baseVal;
     const svgWidth = viewBox.width;
     const svgHeight = viewBox.height;
 
-    // --- Define Layout Parameters ---
-    const padding = { top: 25, bottom: 25, left: 30, right: 30 }; // Increased padding
+    const padding = { top: 25, bottom: 25, left: 30, right: 30 };
     const fretboardWidth = svgWidth - padding.left - padding.right;
     const fretboardHeight = svgHeight - padding.top - padding.bottom;
     const stringSpacing = fretboardHeight / (NUM_STRINGS - 1);
-    const fretSpacing = fretboardWidth / numFrets; // Width per fret space
+    const fretSpacing = fretboardWidth / numFrets;
 
     // --- Draw Strings ---
     for (let i = 0; i < NUM_STRINGS; i++) {
@@ -569,67 +567,80 @@ function drawFretboard(scaleNotes, startFret = 0, numFrets = NUM_FRETS_TO_SHOW) 
         svg.appendChild(line);
     }
 
-    // --- Draw Frets ---
-    for (let i = 0; i <= numFrets; i++) {
-        const x = padding.left + i * fretSpacing;
+     // --- Draw Frets ---
+     for (let i = 0; i <= numFrets; i++) { // Loop from 0 to numFrets (for numFrets+1 lines)
+        const x_line = padding.left + i * fretSpacing; // X-coordinate for the fret LINE
         const line = document.createElementNS(svgNS, 'line');
-        line.setAttribute('x1', x);
+        line.setAttribute('x1', x_line);
         line.setAttribute('y1', padding.top);
-        line.setAttribute('x2', x);
+        line.setAttribute('x2', x_line);
         line.setAttribute('y2', svgHeight - padding.bottom);
-
-        // Special style for the 'nut' (0th fret) if displayed
-        if (startFret === 0 && i === 0) {
-            line.setAttribute('class', 'nut-line');
-        } else {
-            line.setAttribute('class', 'fret-line');
-        }
+        line.setAttribute('class', (startFret === 0 && i === 0) ? 'nut-line' : 'fret-line');
         svg.appendChild(line);
 
         // Add Fret Labels (optional, below the fretboard)
-        const fretNumber = startFret + i;
-        if (fretNumber > 0) { // Don't label the nut as '0' this way
-             const labelX = x; // Center label on the fret line
-             const labelY = svgHeight - padding.bottom / 2; // Position below strings
-             const text = document.createElementNS(svgNS, 'text');
-             text.setAttribute('x', labelX);
-             text.setAttribute('y', labelY);
-             text.setAttribute('class', 'fret-label');
-             // Display only odd numbers or specific frets (3, 5, 7, 9, 12...) for less clutter
-             if (fretNumber % 2 !== 0 || fretNumber === 12 || fretNumber === 24) {
-                 text.textContent = fretNumber;
-                 svg.appendChild(text);
-             }
+        // The label for fret 'N' should appear in the space BEFORE the Nth fret line
+        // (or, equivalently, after the (N-1)th fret line).
+        // 'i' here represents the fret line index.
+        // So, the fret number itself is 'startFret + i'.
+
+        const fretNumberToLabel = startFret + i;
+
+        // We want to label the fret *number*, not the nut as '0' this way.
+        // And we only label if 'i' > 0, meaning we are past the nut (if startFret is 0)
+        // or for any fret if startFret > 0.
+        // The label for fret 'fretNumberToLabel' (e.g., fret 1) is placed in the space
+        // between fret line 0 and fret line 1.
+        if (fretNumberToLabel > 0) {
+            // Calculate the X-coordinate for the fret LABEL.
+            // It should be in the middle of the space defined by the (i-1)th and ith fret lines.
+            // The (i-1)th fret line is at: padding.left + (i-1) * fretSpacing
+            // The ith fret line is at: padding.left + i * fretSpacing
+            // The middle of this space is: padding.left + (i - 0.5) * fretSpacing
+            const labelX = padding.left + (i - 0.5) * fretSpacing;
+
+            const labelY = svgHeight - padding.bottom * 0.3; // Try 30% up from the absolute bottom of padding
+
+            // Display only odd numbers or specific frets (3, 5, 7, 9, 12...) for less clutter
+            // (or any other logic you prefer for which frets to label)
+            if (fretNumberToLabel % 2 !== 0 || fretNumberToLabel === 12 || fretNumberToLabel === 24 || fretNumberToLabel === 5 || fretNumberToLabel === 7 || fretNumberToLabel === 9) {
+                // Ensure we don't try to draw a label to the left of the fretboard if i is 0
+                // (though the fretNumberToLabel > 0 check should mostly handle this for startFret=0)
+                if (i > 0 || startFret > 0) { // Only draw if it's not the space before the nut if nut is visible
+                    const text = document.createElementNS(svgNS, 'text');
+                    text.setAttribute('x', labelX);
+                    text.setAttribute('y', labelY);
+                    text.setAttribute('class', 'fret-label');
+                    text.textContent = fretNumberToLabel;
+                    svg.appendChild(text);
+                }
+            }
         }
     }
 
+    // --- Draw Note Dots and Labels ---
+    const noteRadius = Math.min(stringSpacing / 2.2, fretSpacing / 2.2); // Increased radius for text
 
-    // --- Draw Note Dots ---
-    const noteRadius = Math.min(stringSpacing / 2.5, fretSpacing / 2.5); // Dynamic radius
+    // *** FIX: Determine the comparable version of currentKeyRoot (sharp equivalent if flat) ***
+    let comparableKeyRoot = currentKeyRoot;
+    if (FLAT_TO_SHARP[currentKeyRoot]) {
+        comparableKeyRoot = FLAT_TO_SHARP[currentKeyRoot]; // e.g., "Db" becomes "C#"
+    }
 
     for (let stringIndex = 0; stringIndex < NUM_STRINGS; stringIndex++) {
         const stringY = padding.top + stringIndex * stringSpacing;
         const baseMidi = STANDARD_TUNING_MIDI[stringIndex];
 
-        // --- Loop through the SPACES between frets ---
+        // --- Loop through the SPACES between frets (for fretted notes) ---
         for (let fretIndex = 0; fretIndex < numFrets; fretIndex++) {
-
-            // --- CORRECTED Calculation START ---
-            // The fret number REPRESENTED BY the note in this space (fretIndex)
-            // is determined by the fret wire AFTER the space.
             const fretNumberPressed = startFret + fretIndex + 1;
             const noteMidi = baseMidi + fretNumberPressed;
-            // --- CORRECTED Calculation END ---
-
-            const noteNameOctave = midiToNoteName(noteMidi); // e.g., "C#4"
+            const noteNameOctave = midiToNoteName(noteMidi); // Returns sharp names
 
             if (noteNameOctave) {
-                const noteName = noteNameOctave.replace(/\d/g, ''); // Extract note name ("C#")
+                const noteNameOnly = noteNameOctave.replace(/\d/g, ''); // Extract sharp note name ("C#")
 
-                // Check if this note is in the current scale
-                if (scaleNotes.has(noteName)) {
-                    // Calculate position for the dot (centered between frets)
-                    // Position uses fretIndex to place it in the correct space
+                if (scaleNotes.has(noteNameOnly)) { // scaleNotes also contains sharp names
                     const dotX = padding.left + (fretIndex + 0.5) * fretSpacing;
                     const dotY = stringY;
 
@@ -637,50 +648,66 @@ function drawFretboard(scaleNotes, startFret = 0, numFrets = NUM_FRETS_TO_SHOW) 
                     circle.setAttribute('cx', dotX);
                     circle.setAttribute('cy', dotY);
                     circle.setAttribute('r', noteRadius);
-                    circle.setAttribute('class', 'note-dot'); // Always add the base class
-                    if (noteName === currentKeyRoot) {
-                        circle.classList.add('root-note'); // Add root class if it matches
+                    circle.setAttribute('class', 'note-dot');
+                    // *** FIX: Compare with comparableKeyRoot ***
+                    if (noteNameOnly === comparableKeyRoot) {
+                        circle.classList.add('root-note');
                     }
                     svg.appendChild(circle);
+
+                    // *** ADD TEXT ELEMENT FOR THE NOTE NAME ***
+                    const noteText = document.createElementNS(svgNS, 'text');
+                    noteText.setAttribute('x', dotX);
+                    noteText.setAttribute('y', dotY);
+                    noteText.setAttribute('class', 'note-dot-text');
+                    noteText.textContent = noteNameOnly; // Display sharp name
+                    svg.appendChild(noteText);
                 }
             }
         } // End loop through frets (spaces)
 
         // --- Check Open String Notes (if startFret is 0) ---
-        // This part remains unchanged and correctly handles notes ON the nut line
         if (startFret === 0) {
-            const openStringMidi = baseMidi; // Fret 0
-            const openNoteNameOctave = midiToNoteName(openStringMidi);
+            const openStringMidi = baseMidi;
+            const openNoteNameOctave = midiToNoteName(openStringMidi); // Returns sharp names
             if (openNoteNameOctave) {
-                const openNoteName = openNoteNameOctave.replace(/\d/g, '');
-                if (scaleNotes.has(openNoteName)) {
-                    // Position ON the nut line
+                const openNoteNameOnly = openNoteNameOctave.replace(/\d/g, ''); // Extract sharp note name
+
+                if (scaleNotes.has(openNoteNameOnly)) { // scaleNotes also contains sharp names
                     const dotX = padding.left;
                     const dotY = stringY;
+                    const openNoteRadius = noteRadius * 0.85;
 
                     const circle = document.createElementNS(svgNS, 'circle');
                     circle.setAttribute('cx', dotX);
                     circle.setAttribute('cy', dotY);
-                    circle.setAttribute('r', noteRadius * 0.8);
-                    circle.setAttribute('class', 'note-dot');
-                    if (openNoteName === currentKeyRoot) {
-                       circle.classList.add('root-note');
+                    circle.setAttribute('r', openNoteRadius);
+                    circle.setAttribute('class', 'note-dot open-string-dot');
+                    // *** FIX: Compare with comparableKeyRoot ***
+                    if (openNoteNameOnly === comparableKeyRoot) {
+                        circle.classList.add('root-note');
                     }
                     svg.appendChild(circle);
+
+                    // *** ADD TEXT ELEMENT FOR OPEN STRING NOTE NAME ***
+                    const openNoteText = document.createElementNS(svgNS, 'text');
+                    openNoteText.setAttribute('x', dotX);
+                    openNoteText.setAttribute('y', dotY);
+                    openNoteText.setAttribute('class', 'note-dot-text open-string-dot-text');
+                    openNoteText.textContent = openNoteNameOnly; // Display sharp name
+                    svg.appendChild(openNoteText);
                 }
             }
         } // End check for open strings
-
     } // End loop through strings
 
-    // --- Update Fretboard Info Text ---
     const infoElement = document.getElementById(FRETBOARD_INFO_ID);
     if (infoElement) {
         infoElement.textContent = `Starting Fret: ${startFret}`;
     }
-
     console.log(`Drew fretboard starting at fret ${startFret} for scale:`, scaleNotes);
 }
+
 
 /**
  * Clears the content of the fretboard SVG.
@@ -1414,23 +1441,23 @@ function createCircleOfFifths() {
     circleOfFifthsSVG.innerHTML = ''; // Clear previous SVG content
 
     for (let i = 0; i < numSegments; i++) {
-        // Calculate angles for the segment
-        const angleStart = i * angleStep - 90 - (angleStep / 2); // Start angle in degrees, adjusted for top alignment
-        const angleEnd = angleStart + angleStep;                 // End angle in degrees
-        const midAngle = angleStart + angleStep / 2;             // Mid angle for label placement
-        const largeArcFlag = 0; // Arc segments are less than 180 degrees
+        // ... (existing code for major and minor key segments and labels) ...
+        // (Make sure to copy the ENTIRE loop content here, I'm abbreviating for brevity)
+        const angleStart = i * angleStep - 90 - (angleStep / 2);
+        const angleEnd = angleStart + angleStep;
+        const midAngle = angleStart + angleStep / 2;
+        const largeArcFlag = 0;
 
         // --- Major Key Segment ---
         const majorKeyName = MAJOR_KEYS_CIRCLE[i];
-        // Define the SVG path data for the major segment arc
         const pathMajor = `
             M ${center + outerMajorRadius * Math.cos(angleStart * Math.PI / 180)} ${center + outerMajorRadius * Math.sin(angleStart * Math.PI / 180)}
             A ${outerMajorRadius} ${outerMajorRadius} 0 ${largeArcFlag} 1 ${center + outerMajorRadius * Math.cos(angleEnd * Math.PI / 180)} ${center + outerMajorRadius * Math.sin(angleEnd * Math.PI / 180)}
             L ${center + innerMajorRadius * Math.cos(angleEnd * Math.PI / 180)} ${center + innerMajorRadius * Math.sin(angleEnd * Math.PI / 180)}
             A ${innerMajorRadius} ${innerMajorRadius} 0 ${largeArcFlag} 0 ${center + innerMajorRadius * Math.cos(angleStart * Math.PI / 180)} ${center + innerMajorRadius * Math.sin(angleStart * Math.PI / 180)}
-            Z`; // Corrected: Use angleStart here
+            Z`;
         const segmentMajor = document.createElementNS(svgNS, 'path');
-        segmentMajor.setAttribute('d', pathMajor); // Use the corrected path directly
+        segmentMajor.setAttribute('d', pathMajor);
         segmentMajor.setAttribute('class', 'key-segment-major');
         segmentMajor.setAttribute('data-key', majorKeyName);
         segmentMajor.setAttribute('data-quality', 'Major');
@@ -1439,15 +1466,14 @@ function createCircleOfFifths() {
 
         // --- Minor Key Segment ---
         const minorKeyName = MINOR_KEYS_CIRCLE[i];
-        // Define the SVG path data for the minor segment arc
         const pathMinor = `
             M ${center + outerMinorRadius * Math.cos(angleStart * Math.PI / 180)} ${center + outerMinorRadius * Math.sin(angleStart * Math.PI / 180)}
             A ${outerMinorRadius} ${outerMinorRadius} 0 ${largeArcFlag} 1 ${center + outerMinorRadius * Math.cos(angleEnd * Math.PI / 180)} ${center + outerMinorRadius * Math.sin(angleEnd * Math.PI / 180)}
             L ${center + innerMinorRadius * Math.cos(angleEnd * Math.PI / 180)} ${center + innerMinorRadius * Math.sin(angleEnd * Math.PI / 180)}
             A ${innerMinorRadius} ${innerMinorRadius} 0 ${largeArcFlag} 0 ${center + innerMinorRadius * Math.cos(angleStart * Math.PI / 180)} ${center + innerMinorRadius * Math.sin(angleStart * Math.PI / 180)}
-            Z`; // Corrected: Use angleStart here
+            Z`;
         const segmentMinor = document.createElementNS(svgNS, 'path');
-        segmentMinor.setAttribute('d', pathMinor); // Use the corrected path directly
+        segmentMinor.setAttribute('d', pathMinor);
         segmentMinor.setAttribute('class', 'key-segment-minor');
         segmentMinor.setAttribute('data-key', minorKeyName);
         segmentMinor.setAttribute('data-quality', 'Minor');
@@ -1456,28 +1482,102 @@ function createCircleOfFifths() {
 
         // --- Major Key Label ---
         const majorLabelRadius = (outerMajorRadius + innerMajorRadius) / 2;
-        // Calculate position for the label within the major segment
         const majorLabelX = center + majorLabelRadius * Math.cos(midAngle * Math.PI / 180);
         const majorLabelY = center + majorLabelRadius * Math.sin(midAngle * Math.PI / 180);
         const majorText = document.createElementNS(svgNS, 'text');
         majorText.setAttribute('x', majorLabelX);
         majorText.setAttribute('y', majorLabelY);
-        majorText.setAttribute('class', 'key-label'); // Use CSS class for styling
+        majorText.setAttribute('class', 'key-label');
         majorText.textContent = majorKeyName;
         circleOfFifthsSVG.appendChild(majorText);
 
         // --- Minor Key Label ---
         const minorLabelRadius = (outerMinorRadius + innerMinorRadius) / 2;
-        // Calculate position for the label within the minor segment
         const minorLabelX = center + minorLabelRadius * Math.cos(midAngle * Math.PI / 180);
         const minorLabelY = center + minorLabelRadius * Math.sin(midAngle * Math.PI / 180);
         const minorText = document.createElementNS(svgNS, 'text');
         minorText.setAttribute('x', minorLabelX);
         minorText.setAttribute('y', minorLabelY);
-        minorText.setAttribute('class', 'key-label minor'); // Use CSS class, add 'minor' for specific styling if needed
-        minorText.textContent = minorKeyName + 'm'; // Add 'm' for minor keys
+        minorText.setAttribute('class', 'key-label minor');
+        minorText.textContent = minorKeyName + 'm';
         circleOfFifthsSVG.appendChild(minorText);
     }
+
+    // --- START: Add Random Practice Button ---
+    const randomButtonRadius = innerMinorRadius * 0.85; // Smaller than the innermost ring
+
+    // Create a group for the random button to make styling/events easier
+    const randomButtonGroup = document.createElementNS(svgNS, 'g');
+    randomButtonGroup.setAttribute('id', 'randomPracticeButton');
+    randomButtonGroup.style.cursor = 'pointer'; // Make it look clickable
+
+    const randomCircle = document.createElementNS(svgNS, 'circle');
+    randomCircle.setAttribute('cx', center);
+    randomCircle.setAttribute('cy', center);
+    randomCircle.setAttribute('r', randomButtonRadius);
+    randomCircle.setAttribute('class', 'random-button-circle'); // For CSS styling
+    randomButtonGroup.appendChild(randomCircle);
+
+    const randomText = document.createElementNS(svgNS, 'text');
+    randomText.setAttribute('x', center);
+    randomText.setAttribute('y', center);
+    randomText.setAttribute('class', 'random-button-text'); // For CSS styling
+    randomText.textContent = '?';
+    randomButtonGroup.appendChild(randomText);
+
+    randomButtonGroup.addEventListener('click', handleRandomPracticeClick);
+    circleOfFifthsSVG.appendChild(randomButtonGroup);
+    // --- END: Add Random Practice Button ---
+}
+
+function handleRandomPracticeClick() {
+    console.log("Random practice button clicked!");
+
+    // 1. Randomly select Key Quality
+    currentKeyQuality = Math.random() < 0.5 ? 'Major' : 'Minor';
+    console.log(`Randomly selected quality: ${currentKeyQuality}`);
+
+    // 2. Randomly select Key Root based on quality
+    const keysForQuality = currentKeyQuality === 'Major' ? MAJOR_KEYS_CIRCLE : MINOR_KEYS_CIRCLE;
+    currentKeyRoot = keysForQuality[Math.floor(Math.random() * keysForQuality.length)];
+    console.log(`Randomly selected root: ${currentKeyRoot}`);
+
+    // 3. Populate progression select for the new key/quality
+    // This also sets currentProgressionId to the *first* available one by default.
+    populateProgressionSelect();
+
+    // 4. Randomly select a progression from the populated (and enabled) options
+    const availableOptions = Array.from(progressionSelect.options).filter(option => !option.disabled && option.value);
+    if (availableOptions.length > 0) {
+        const randomOption = availableOptions[Math.floor(Math.random() * availableOptions.length)];
+        currentProgressionId = randomOption.value;
+        progressionSelect.value = currentProgressionId; // Update dropdown display
+        console.log(`Randomly selected progression: ${currentProgressionId} (${randomOption.textContent})`);
+    } else {
+        console.warn("No progressions available for the randomly selected key. Cannot start random practice.");
+        // Optionally, display a message to the user
+        alert(`No progressions found for ${currentKeyRoot} ${currentKeyQuality}. Please define some or try another key.`);
+        return; // Don't proceed to startApp
+    }
+
+    // 5. Set Fretboard View to Random
+    fretboardViewMode = 'random';
+    fretViewRandomRadio.checked = true; // Update radio button UI
+    // Ensure other radio buttons are unchecked (though 'name' attribute should handle this)
+    fretViewFixedRadio.checked = false;
+    fretViewSlidingRadio.checked = false;
+    // Hide sliding start fret control as 'random' mode doesn't use it
+    slidingStartFretControlDiv.classList.add('hidden');
+    startFretInput.disabled = true;
+    console.log(`Set fretboard view mode to: ${fretboardViewMode}`);
+
+
+    // 6. Update Circle of Fifths Highlight
+    highlightCircleSegment(currentKeyRoot, currentKeyQuality);
+
+    // 7. Start the application
+    console.log("Starting app with random settings...");
+    startApp();
 }
 
 

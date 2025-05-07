@@ -220,6 +220,33 @@ input[type="range"]::-moz-range-thumb {
     pointer-events: none; /* Labels shouldn't block clicks */
 }
 
+/* Style for the random practice button */
+#randomPracticeButton .random-button-circle {
+    fill: var(--secondary-color); /* Or any distinct color */
+    stroke: var(--border-color);
+    stroke-width: 0.7;
+    transition: fill 0.2s ease; /* Only transition fill now */
+}
+
+#randomPracticeButton:hover .random-button-circle {
+    fill: var(--accent-color); /* Highlight on hover - ONLY CHANGE FILL */
+}
+
+#randomPracticeButton:active .random-button-circle {
+    fill: var(--primary-color); /* Different fill for active/click state, or use accent-color darkened */
+    /* Example: filter: brightness(0.9); if you want to darken the accent color */
+}
+
+
+#randomPracticeButton .random-button-text {
+    fill: var(--bg-color); /* Dark text on lighter button */
+    font-size: 12px; /* Adjust size as needed */
+    font-weight: bold;
+    text-anchor: middle;
+    dominant-baseline: central; /* Better vertical centering for text */
+    pointer-events: none; /* Text shouldn't block clicks on the circle */
+    font-family: sans-serif;
+}
 
 /* --- Lesson Phase Specific --- */
 #lessonInfo {
@@ -421,14 +448,33 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .note-dot {
-    fill: var(--primary-color);
+    fill: #bbbbbb;
     stroke: #1a1c20;
     stroke-width: 0.5;
     opacity: 0.9;
+    /* Ensure dots are drawn under the text if there's overlap issues,
+       though typically text is drawn on top by default.
+       Consider z-index if you were using HTML elements, but for SVG,
+       order of appending matters. Text is appended after circle. */
 }
 
 .note-dot.root-note {
-    fill: #ff5900;
+    fill: #F9D579; /* Orange for root note */
+}
+
+/* New style for the text inside the note dots */
+.note-dot-text {
+    fill: var(--bg-color); /* Dark text on a lighter dot, or var(--text-color) for light on dark */
+    font-family: sans-serif; /* Or your preferred font */
+    font-size: 7px;      /* Adjust as needed, relative to viewBox */
+    font-weight: bold;   /* Optional: make it bold */
+    text-anchor: middle; /* Horizontally center */
+    dominant-baseline: central; /* Vertically center (good approximation) */
+    pointer-events: none; /* Text should not interfere with any dot click events (if any added later) */
+    -webkit-user-select: none; /* Disable text selection */
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 .fret-label {
