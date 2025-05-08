@@ -118,6 +118,7 @@ input[type="range"]::-moz-range-thumb {
 
 
 .control-group {
+    text-align: -webkit-center;
     margin-top: 15px;
     margin-bottom: 20px;
     padding: 10px;
